@@ -1,0 +1,15 @@
+{
+  "name": "menards-parser",
+  "version": "1.0.0",
+  "description": "Adobe PDF Extract API parser for Menards orders",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@adobe/pdfservices-node-sdk": "^1.2.0",
+    "dotenv": "^16.0.0",
+    "express": "^4.18.2",
+    "multer": "^1.4.5"
+  }
+}
