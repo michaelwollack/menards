@@ -1,23 +1,30 @@
 # Rep Profitability Box — Sales Department Board
 
-Fills the open grid slot next to **Alerts** on the Sales Department Board
-(script `7840` / `customscript_mw_sl_sales_dashboard`, file
-`Sales_Department_Board_Suitelet (1).js`).
+Fills the open grid slot to the **left of the Alerts card** on the Sales
+Department Board (script `7840` / `customscript_mw_sl_sales_dashboard`,
+file `Sales_Department_Board_Suitelet (1).js`).
 
 ## What it shows
 
-Per sales rep, fiscal year to date, ranked by gross profit:
+The **currently selected rep only**, scoped to **Promier Products
+(subsidiary 1)**, fiscal year to date — laid out like the Customer
+Profitability report: a summary tile strip over a ranked breakout table.
+
+Tiles: Revenue · Gross Profit · Margin · Margin vs LY.
+
+Breakout table, one row per customer, ranked by gross profit:
 
 | Column | Meaning |
 |---|---|
-| Rep | `transaction.employee` (the Sales Rep header field) |
+| Customer | `transaction.entity`, NetSuite id prefix stripped |
 | Revenue | Item-line revenue, excluding shipping and tax |
 | GP $ | Revenue less estimated cost |
 | GP % | Gross margin |
 | vs LY | Margin change in points vs the **same window** last year |
 
-Plus an all-reps total row, and a `⚠` on any rep whose margin is
-overstated because part of their revenue has no cost estimate.
+Plus a total row, and a `⚠` on any customer whose margin is overstated
+because part of that revenue has no cost estimate (the tooltip gives the
+exact percentage missing).
 
 ## Install
 
@@ -31,12 +38,21 @@ overstated because part of their revenue has no cost estimate.
      function (query, /* ...existing... */, repProfitBox) {
    ```
 
-3. Where the board writes the open cell next to Alerts, emit the card:
+3. Where the board writes the open cell to the left of Alerts, emit the
+   card, passing the board's **already-resolved selected rep**:
 
    ```js
-   var repProfitHtml = repProfitBox.render();        // defaults: top 8 reps, today
-   // var repProfitHtml = repProfitBox.render({ limit: 6 });
+   var repProfitHtml = repProfitBox.render({
+     repId:   selectedRepId,     // whatever the board already uses for the
+                                 // "MY ORDERS" / rep-scoped Alerts section
+     repName: selectedRepName    // optional; derived from the data if omitted
+   });
    ```
+
+   The card deliberately does **not** resolve the selected rep itself —
+   the board already owns that state, and duplicating the logic would let
+   the two sections disagree. With no `repId` it renders a neutral
+   "Select a rep" placeholder rather than erroring.
 
    Then write `repProfitHtml` into that cell exactly the way the Alerts
    box's HTML is written — it is a complete, self-contained fragment
@@ -47,6 +63,17 @@ If the board builds its cells with `serverWidget` inline HTML fields,
 `render()`'s return value is what goes into the field's `defaultValue`.
 
 ## Assumptions worth confirming
+
+**Styling is inferred, not copied.** "Make it look like the Customer
+Profitability breakout" was implemented from the report's *name and shape*
+— tile strip over ranked table — because the egress proxy blocks
+`4854895.app.netsuite.com`, so `mw_sl_customer_profit.js` could not be
+read. If that report uses a specific tile order, palette or column set,
+send a screenshot and this will be matched properly.
+
+**Breakout dimension is customer.** A rep's profitability broken out by
+the customers they sell. If the intended breakout is by item, category or
+month instead, only the `GROUP BY` and one column label change.
 
 **Fiscal year is Oct 1 – Sep 30.** Taken from the FY25 Top-10 Customers
 report ("October 1, 2024 – September 30, 2025"). NetSuite's accounting
@@ -70,33 +97,46 @@ join that belongs in a reporting layer, not in a dashboard card.
 These are real conditions in the account today, not defects in the card.
 The `⚠` exists so they are visible rather than silently flattering.
 
-| Rep | FYTD revenue | Revenue carrying a cost | Margin shown |
+Cody, FY26 to date, Promier only — his two largest accounts are the two
+with the worst cost coverage:
+
+| Customer | Revenue | Revenue carrying a cost | Margin shown |
 |---|---|---|---|
-| Unassigned Rep | $31.5K | $49.50 (0.2%) | 100.0% ⚠ |
-| Ryan R Cavaletto | $79.4K | $41.4K (52%) | 100.0% ⚠ |
-| *(no rep set)* | $7.75M | $4.92M (63%) | 90.7% ⚠ |
-| Cody D Grandadam | $17.02M | $11.80M (69%) | 61.0% ⚠ |
-| Matt Pell | $1.43M | $0.87M (61%) | 74.4% ⚠ |
+| Walmart Stores | $10.22M | $5.00M (49%) | 74.5% ⚠ |
+| Menard, Inc | $4.43M | $4.51M (100%) | 32.6% |
+| Dollar General | $1.06M | $1.08M (100%) | 37.0% |
+| 40 Boxes | $130K | $77K (59%) | 82.1% ⚠ |
+
+Because Walmart is 63% of his revenue and 41% of it has no cost estimate,
+his headline margin and his "up 0.8 pts vs LY" are both flattered. Read
+the Menard and Dollar General rows as the trustworthy ones — Dollar
+General margin is **down 10.7 pts** year over year on roughly half the
+revenue, which is the kind of thing this box exists to surface.
 
 Three things to fix at the source, none of them in this file:
 
 1. **Cost estimates are missing on a large share of revenue**, heaviest in
-   the B2C / channel business. Until item cost estimates are populated,
-   every margin here reads high.
-2. **$7.75M FYTD has no sales rep set at all** — the second-largest block
-   of revenue on the board. It renders as "Unassigned / channel".
+   the Walmart and B2C/channel business. Until item cost estimates are
+   populated, every margin here reads high.
+2. **$7.75M FYTD account-wide has no sales rep set at all**, so it belongs
+   to nobody's card. Worth assigning before this goes in front of the team.
 3. **Duplicate employee records.** `Matt  Pell` (id 35496), `Matt Pell`
    (id 35495) and `Pell Matt` (id 36025) are three records for one person,
-   so his numbers split across three rows. Same pattern on the Kelly Brand
-   records. Merging those in NetSuite fixes it everywhere, not just here.
+   so selecting one of them shows a third of his business. Same pattern on
+   the Kelly Brand records. Merging those in NetSuite fixes it everywhere,
+   not just here.
 
 ## Verification performed
 
-- Module's generated SQL executed against the production account —
-  27 rows, no errors.
+- Module's generated SQL executed against the production account,
+  rep-scoped and subsidiary-scoped — no errors.
 - Fiscal window boundaries unit-checked, including the Sep 30 → Oct 1
   year rollover.
-- Bind-parameter count checked against `?` placeholders (8 = 8).
-- Render checked against real FY26 data: sorts by GP descending, excludes
-  zero-activity reps, labels null reps, raises coverage warnings, and
-  totals to $37.01M revenue / $24.23M GP / 65.5% margin, down 1.0 pt YoY.
+- Bind-parameter count checked against `?` placeholders (10 = 10),
+  including the subsidiary and rep binds in the right positions.
+- Render checked against real FY26 data for Cody: sorts by GP descending,
+  strips entity-id prefixes, drops fully inactive customers, raises
+  coverage warnings with the correct missing percentage, renders the
+  no-rep placeholder, and totals to $16.10M revenue / $9.68M GP / 60.1%
+  margin — the Promier-only figure, correctly $0.92M below his
+  all-subsidiary total.
