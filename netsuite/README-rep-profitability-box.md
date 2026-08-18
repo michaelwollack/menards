@@ -26,7 +26,28 @@ Plus a total row, and a `⚠` on any customer whose margin is overstated
 because part of that revenue has no cost estimate (the tooltip gives the
 exact percentage missing).
 
-## Install
+## Files
+
+| File | Role |
+|---|---|
+| `mw_sl_rep_profitability_box.js` | The card. Renders to an HTML string. No entry point, no deployment of its own. |
+| `mw_sl_rep_profitability_sl.js` | Standalone Suitelet wrapper — deploys the card as its own page with a rep selector, so the feature is usable before the board is edited. |
+
+The card is the same object in both paths. Deploying the wrapper first
+does not create work to undo later: when the board is wired up it calls
+`box.render({ repId })` and the wrapper simply becomes optional.
+
+## Option A — deploy standalone today (no board changes)
+
+1. Upload **both** files to **SuiteScripts** (File Cabinet folder `-15`).
+2. Create a Script record from `mw_sl_rep_profitability_sl.js`:
+   - Type **Suitelet**, ID `customscript_mw_sl_rep_profit`
+   - Deployment `customdeploy1`, Status **Released**
+   - Available Without Login **No**
+3. Open the deployment URL. The rep selector defaults to the
+   highest-revenue rep, so the page is never empty on first load.
+
+## Option B — install into the Sales Department Board
 
 1. Upload `mw_sl_rep_profitability_box.js` to the **SuiteScripts** folder
    (File Cabinet folder `-15`, where the other `mw_*` board scripts live).
@@ -63,6 +84,15 @@ If the board builds its cells with `serverWidget` inline HTML fields,
 `render()`'s return value is what goes into the field's `defaultValue`.
 
 ## Assumptions worth confirming
+
+**The board integration has not been performed.**
+`Sales_Department_Board_Suitelet (1).js` could not be read or written from
+this environment: the egress proxy denies `4854895.app.netsuite.com` at
+org-policy level, and NetSuite's REST record API refuses the `file` record
+type. The file is not mirrored in Box, Drive, or any accessible repo. The
+wiring in Option B is therefore written against the board's public shape,
+not against its source, and needs a human to apply it. Option A exists so
+the feature is not blocked on that.
 
 **Styling is inferred, not copied.** "Make it look like the Customer
 Profitability breakout" was implemented from the report's *name and shape*
@@ -134,6 +164,10 @@ Three things to fix at the source, none of them in this file:
   year rollover.
 - Bind-parameter count checked against `?` placeholders (10 = 10),
   including the subsidiary and rep binds in the right positions.
+- Standalone Suitelet checked: defaults to the highest-revenue rep,
+  selector lists every rep with Promier activity, collapses double spaces
+  in employee names, honours an explicit `?rep=` parameter, and rejects
+  non-GET requests.
 - Render checked against real FY26 data for Cody: sorts by GP descending,
   strips entity-id prefixes, drops fully inactive customers, raises
   coverage warnings with the correct missing percentage, renders the
